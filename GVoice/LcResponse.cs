@@ -32,14 +32,18 @@
                     public int coarseType;
                     public int transcriptStatus;
                     public bool isArtificialErrorMessage;
-                    public override bool Equals(object obj)
+                    public override bool Equals(object _obj)
                     {
-                        return (obj is PhoneCall && obj.GetHashCode() == GetHashCode());
-
+                        if (!(_obj is PhoneCall))
+                        {
+                            return false;
+                        }
+                        PhoneCall obj = (PhoneCall)_obj;
+                        return id==obj.id;
                     }
                     public override int GetHashCode()
                     {
-                        return int.Parse(id, System.Globalization.NumberStyles.HexNumber);
+                        return (int)(long.Parse(id, System.Globalization.NumberStyles.HexNumber)%int.MaxValue);
                     }
                 }
                 public HeadingContact[] headingContact;

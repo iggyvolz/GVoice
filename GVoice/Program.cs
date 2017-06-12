@@ -1,28 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Linq;
+using System.Threading;
+using System.Text.RegularExpressions;
 
 namespace GVoice
 {
     class Program
     {
-        static void Main(string[] args)
+        static void GetCookies(out string apikey, out string sid, out string hsid, out string ssid, out string apisid, out string sapisid)
         {
             Console.WriteLine("First, open voice.google.com in Google Chrome (other browsers coming soon), and log in.");
             Console.WriteLine("Cookie *must* be saved - you cannot use Incognito mode.");
             Console.WriteLine("Then type javascript:frames.___jsl.cfg.client.apiKey (and press enter) in the browser bar to get your api key");
             Console.Write("API key? ");
-            string apikey = Console.ReadLine();
-            string sid = "";
-            string hsid = "";
-            string ssid = "";
-            string apisid = "";
-            string sapisid = "";
+            apikey = Console.ReadLine();
+            sid = "";
+            hsid = "";
+            ssid = "";
+            apisid = "";
+            sapisid = "";
             ChromeCookieReader reader = new ChromeCookieReader();
             IEnumerable<Tuple<string, string>> cookies = reader.ReadCookies(".google.com");
             foreach (Tuple<string, string> cookie in cookies)
             {
-                switch(cookie.Item1)
+                switch (cookie.Item1)
                 {
                     case "SID":
                         sid = cookie.Item2;
@@ -47,26 +50,51 @@ namespace GVoice
                 Console.WriteLine("Please log into voice.google.com using Google Chrome");
                 return;
             }
-            try
+        }
+        static void Main(string[] args)
+        {
+            string apikey, sid, hsid, ssid, apisid, sapisid;
+            GetCookies(out apikey, out sid, out hsid, out ssid, out apisid, out sapisid);
+            GVoice gVoice = new GVoice(apikey, sid, hsid, ssid, apisid, sapisid);
+            Console.WriteLine("Phone number?");
+            Console.WriteLine("Use 10 digits (ex. 15555555555)");
+            string conversationId = "";
+            while(true)
             {
-                LcResponse response=new GVoice(apikey, sid, hsid, ssid, apisid, sapisid).GetMessages();
-                foreach (LcResponse.Response.Conversation conversation in response.response.conversation)
+                Console.Write("> ");
+                string line = Console.ReadLine();
+                if(Regex.IsMatch(line, "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"))
                 {
-                    Console.WriteLine("Conversation with " + conversation.headingContact[0].name + ":");
-                    foreach(LcResponse.Response.Conversation.PhoneCall call in conversation.phoneCall)
-                    {
-                        // 5: Sent message
-                        // 6: Received message
-                        Console.WriteLine(((call.coarseType==5)?"Me":call.contact.name) + ": "+call.messageText);
-                    }
+                    conversationId = "t.+" + line;
+                    break;
                 }
+                Console.WriteLine("Invalid phone number");
             }
-            catch(WebException e)
+            List<LcResponse.Response.Conversation.PhoneCall> messages = new List<LcResponse.Response.Conversation.PhoneCall>();
+            Thread checkMessagesThread = new Thread(() =>
+                {
+                    while(true)
+                    {
+                        LcResponse response = gVoice.GetMessages(20);
+                        LcResponse.Response.Conversation conversation = response.response.conversation.First((LcResponse.Response.Conversation c) => c.id == conversationId);
+                        for (int i = conversation.phoneCall.Length - 1; i >= 0; i--)
+                        {
+                            LcResponse.Response.Conversation.PhoneCall call = conversation.phoneCall[i];
+                            if (!messages.Contains(call))
+                            {
+                                messages.Add(call);
+                                Console.WriteLine(((call.coarseType == 5) ? "Me" : call.contact.name) + ": " + call.messageText);
+                            }
+                        }
+                        Thread.Sleep(5000);
+                    }
+                });
+            checkMessagesThread.Start();
+            while(true)
             {
-                Console.WriteLine("Caught a "+e.GetType()+", check your API key?");
+                string message = Console.ReadLine();
+                gVoice.SendMessage(message, conversationId);
             }
-            Console.Write("Press any key to quit...");
-            Console.ReadKey();
         }
     }
 }
