@@ -61,10 +61,12 @@ namespace GVoice
                     }
                 }
             }
-            catch(WebException)
+            catch(WebException e)
             {
-                Console.WriteLine(false);
+                Console.WriteLine("Caught a "+e.GetType()+", check your API key?");
             }
+            Console.Write("Press any key to quit...");
+            Console.ReadKey();
         }
     }
 }
